@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'screens/cerita_list_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -87,7 +86,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _buildPlaceholder('Beranda', Icons.home_outlined),
       _buildPlaceholder('Gunung', Icons.terrain_outlined),
       _buildPlaceholder('Persiapan', Icons.fact_check_outlined),
-      const CeritaListScreen(),
+      _buildPlaceholder('Komunitas', Icons.groups_outlined),
       _buildPlaceholder('Profil', Icons.person_outline),
     ];
 
