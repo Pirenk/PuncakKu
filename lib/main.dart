@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'screens/persiapan/persiapan_hub_screen.dart';
+import 'screens/placeholder_screens.dart';
+import 'state/pendaki_state.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,12 +15,13 @@ class MyApp extends StatelessWidget {
     const primaryColor = Color(0xFF1B4D3E);
 
     return MaterialApp(
-      title: 'Aplikasi Pendakian',
+      title: 'Pendaki',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
           seedColor: primaryColor,
+          
           primary: primaryColor,
         ),
         scaffoldBackgroundColor: const Color(0xFFF7F9F8),
@@ -35,59 +39,51 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0; // Mulai dari Beranda
+  // Mulai langsung di tab Persiapan (index 2) agar fitur langsung tampil
+  int _currentIndex = 2;
 
   final Color _primaryDark = const Color(0xFF1B4D3E);
 
-  Widget _buildPlaceholder(String title, IconData icon) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F9F8),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF7F9F8),
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xFF182A22),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 64, color: _primaryDark.withValues(alpha: 0.4)),
-            const SizedBox(height: 16),
-            Text(
-              'Halaman $title',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF182A22),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Halaman ini masih kosong.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-            ),
-          ],
-        ),
-      ),
-    );
+  // Instansiasi state persiapan satu kali agar tetap persisten selama navigasi
+  late final PendakiState _pendakiState;
+
+  @override
+  void initState() {
+    super.initState();
+    _pendakiState = PendakiState();
+  }
+
+  @override
+  void dispose() {
+    _pendakiState.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 5 Halaman lengkap sesuai dengan 5 tombol tab navigasi bawah
+    // 5 Halaman lengkap sesuai dengan rancangan tab navigasi bawah
     final List<Widget> pages = [
-      _buildPlaceholder('Beranda', Icons.home_outlined),
-      _buildPlaceholder('Gunung', Icons.terrain_outlined),
-      _buildPlaceholder('Persiapan', Icons.fact_check_outlined),
-      _buildPlaceholder('Komunitas', Icons.groups_outlined),
-      _buildPlaceholder('Profil', Icons.person_outline),
+      const PlaceholderScreen(
+        title: 'Beranda',
+        icon: Icons.home_outlined,
+        subtitle: 'Jelajahi panduan pendakian, tips keselamatan, dan info cuaca gunung.',
+      ),
+      const PlaceholderScreen(
+        title: 'Gunung',
+        icon: Icons.landscape_outlined,
+        subtitle: 'Informasi jalur resmi, pos pendakian, dan kuota tiket gunung di Jawa Tengah.',
+      ),
+      PersiapanHubScreen(state: _pendakiState),
+      const PlaceholderScreen(
+        title: 'Komunitas',
+        icon: Icons.groups_outlined,
+        subtitle: 'Cerita pendaki, forum tanya jawab, dan cari teman pendakian bareng.',
+      ),
+      const PlaceholderScreen(
+        title: 'Profil',
+        icon: Icons.person_outline,
+        subtitle: 'Kelola akun pendaki, riwayat pendakian, dan sertifikat kelulusan simaksi.',
+      ),
     ];
 
     return Scaffold(
