@@ -2,200 +2,220 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import '../database/tracking_database.dart';
+import '../utils/gps_tracking.dart';
+import '../utils/gps_tracking_point.dart';
 import '../utils/tracking_calculator.dart';
 
 // =============================================================================
-// MODUL SERVICE TRACKING LOKASI & FOREGROUND SERVICE (BACKGROUND GPS)
-// =============================================================================
-// File ini adalah service pusat yang menangani:
-// 1. Izin lokasi (Location Permission)
-// 2. Pengambilan koordinat GPS di latar belakang (Background Tracking)
-// 3. Optimasi baterai smartphone agar tidak boros saat pendakian
-// 4. Pengiriman data stream ke UI secara realtime (Reaktif)
+// SERVICE TRACKING GPS & BACKGROUND LOCATION - PUNCAKKU
 // =============================================================================
 
-// Status aktivitas tracking (Mesin status / State Machine)
 enum TrackingStatus { stopped, tracking, paused }
 
-// -----------------------------------------------------------------------------
-// [MODEL STATISTIK RUNTIME]
-// Data gabungan yang dikirim setiap detik/setiap ada sinyal GPS baru ke antarmuka UI.
-// -----------------------------------------------------------------------------
 class TrackingStats {
-  final double currentLatitude; // Titik Lintang saat ini
-  final double currentLongitude; // Titik Bujur saat ini
-  final double currentAltitude; // Ketinggian (mdpl)
-  final double currentSpeed; // Kecepatan bergerak (m/s)
-  final double totalDistance; // Akumulasi jarak tempuh (meter)
-  final double elevationGain; // Akumulasi kenaikan elevasi (meter)
-  final Duration duration; // Lama waktu tracking berjalan
-  final double accuracy; // Akurasi GPS (dalam radius meter)
-  final double heading; // Arah hadap mata angin (0-360 derajat)
+  final int? idTracking;
+  final double currentLatitude;
+  final double currentLongitude;
+  final double currentAltitude;
+  final double currentSpeed;
+  final double totalDistanceMeters;
+  final double totalDistanceKm;
+  final double elevationGain;
+  final Duration duration;
+  final double accuracy;
+  final double heading;
+  final int pointsCount;
 
   TrackingStats({
+    this.idTracking,
     required this.currentLatitude,
     required this.currentLongitude,
     required this.currentAltitude,
     required this.currentSpeed,
-    required this.totalDistance,
+    required this.totalDistanceMeters,
+    required this.totalDistanceKm,
     required this.elevationGain,
     required this.duration,
     required this.accuracy,
     required this.heading,
+    this.pointsCount = 0,
   });
 }
 
-// -----------------------------------------------------------------------------
-// [CLASS TRACKING SERVICE]
-// Service Singleton yang mengelola siklus hidup GPS di background.
-// -----------------------------------------------------------------------------
 class TrackingService {
   static final TrackingService instance = TrackingService._init();
   TrackingService._init();
 
-  StreamSubscription<Position>? _positionStream; // Langganan sinyal GPS
-  Timer? _durationTimer; // Timer stopwatch pendakian
+  StreamSubscription<Position>? _positionStream;
+  Timer? _durationTimer;
 
   TrackingStatus _status = TrackingStatus.stopped;
   TrackingStatus get status => _status;
 
-  int? _activeSessionId; // ID sesi database yang sedang aktif direkam
-  int? get activeSessionId => _activeSessionId;
+  int? _activeTrackingId;
+  int? get activeTrackingId => _activeTrackingId;
+
+  int _currentUserId = 1; // default user
+  int? _currentTripId;
 
   DateTime? _startTime;
   Duration _elapsedDuration = Duration.zero;
 
   double _totalDistanceMeters = 0.0;
   double _elevationGainMeters = 0.0;
-  final List<double> _altitudeHistory = []; // Riwayat ketinggian untuk hitung elev gain
+  final List<double> _altitudeHistory = [];
+  int _pointsCount = 0;
 
   Position? _lastRecordedPosition;
   Position? get lastPosition => _lastRecordedPosition;
 
-  // StreamController untuk komunikasi asinkron antara Service dan Tampilan UI
   final _statsController = StreamController<TrackingStats>.broadcast();
   Stream<TrackingStats> get statsStream => _statsController.stream;
 
   final _statusController = StreamController<TrackingStatus>.broadcast();
   Stream<TrackingStatus> get statusStream => _statusController.stream;
 
-  // ---------------------------------------------------------------------------
-  // [POIN PRESENTASI 5: PENANGANAN IZIN LOKASI (PERMISSION HANDLING)]
-  // Penjelasan: "Aplikasi secara otomatis memeriksa apakah hardware GPS di HP aktif.
-  // Jika belum, sistem meminta user menyalakan GPS. Selanjutnya memeriksa izin
-  // runtime akses lokasi (ACCESS_FINE_LOCATION) dan background."
-  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // GPS permission handling
+  // ---------------------------------------------------------------
   Future<bool> checkAndRequestPermissions() async {
-    // 1. Cek apakah layanan GPS di HP menyala
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      return false;
+      // Coba minta aktifkan GPS atau buka settings
+      await Geolocator.openLocationSettings();
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return false;
     }
 
-    // 2. Cek izin akses dari sistem operasi Android
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return false;
-      }
+      if (permission == LocationPermission.denied) return false;
     }
-
-    // Jika user memilih 'Tolak dan jangan tanya lagi'
     if (permission == LocationPermission.deniedForever) {
+      await Geolocator.openAppSettings();
       return false;
     }
-
     return true;
   }
 
-  // ---------------------------------------------------------------------------
-  // [POIN PRESENTASI 6: BACKGROUND LOCATION & FOREGROUND SERVICE & HEMAT BATERAI]
-  // Pertanyaan Dosen: "Bagaimana cara tracking tetap hidup saat layar HP mati tanpa
-  // menguras baterai?"
-  // Jawaban:
-  // 1. Foreground Service: Menampilkan notifikasi persisten di status bar Android
-  //    dengan flag 'enableWakeLock: true'. Ini mencegah OS Android 'membunuh' (kill)
-  //    proses aplikasi saat layar dimatikan dan dimasukkan ke saku.
-  // 2. Optimasi Baterai:
-  //    - distanceFilter: 10 (Hanya membaca GPS jika pendaki bergerak minimal 10 meter).
-  //    - intervalDuration: 15 detik (GPS tidak polling terus-menerus setiap milidetik,
-  //      melainkan berjarak 15 detik untuk menghemat konsumsi daya baterai)."
-  // ---------------------------------------------------------------------------
-  Future<int?> startTracking({String sessionTitle = 'Pendakian Baru'}) async {
-    if (_status == TrackingStatus.tracking) return _activeSessionId;
+  // ---------------------------------------------------------------
+  // Start tracking – creates a row in `gps_tracking`
+  // ---------------------------------------------------------------
+  Future<int?> startTracking({int userId = 1, int? tripId}) async {
+    if (_status == TrackingStatus.tracking) return _activeTrackingId;
 
     final hasPermission = await checkAndRequestPermissions();
-    if (!hasPermission) return null;
+    if (!hasPermission) {
+      debugPrint('TrackingService: Izin GPS ditolak atau GPS tidak aktif.');
+      return null;
+    }
 
-    // Reset seluruh variabel kalkulasi sesi sebelumnya
+    _currentUserId = userId;
+    _currentTripId = tripId;
     _totalDistanceMeters = 0.0;
     _elevationGainMeters = 0.0;
     _altitudeHistory.clear();
     _lastRecordedPosition = null;
+    _pointsCount = 0;
     _startTime = DateTime.now();
     _elapsedDuration = Duration.zero;
 
-    // Langkah 1: Buat baris sesi baru di SQLite
-    _activeSessionId = await TrackingDatabase.instance.createSession(sessionTitle);
+    // Ambil koordinat GPS awal secara langsung agar peta langsung update
+    try {
+      final initialPosition = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 5),
+        ),
+      );
+      _lastRecordedPosition = initialPosition;
+    } catch (e) {
+      debugPrint('Catatan awal GPS: $e');
+    }
+
+    // Insert summary row using the new GpsTracking model.
+    final tracking = GpsTracking(
+      idUser: _currentUserId,
+      idTrip: _currentTripId,
+      tanggalMulai: _startTime!,
+    );
+    _activeTrackingId = await TrackingDatabase.instance.insertTracking(tracking);
+
+    // Jika koordinat awal sudah didapat, simpan langsung sebagai titik pertama
+    if (_lastRecordedPosition != null && _activeTrackingId != null) {
+      final firstPoint = GpsTrackingPoint(
+        idTracking: _activeTrackingId!,
+        latitude: _lastRecordedPosition!.latitude,
+        longitude: _lastRecordedPosition!.longitude,
+        altitude: _lastRecordedPosition!.altitude,
+        accuracy: _lastRecordedPosition!.accuracy,
+        speed: _lastRecordedPosition!.speed,
+        recordedAt: DateTime.now(),
+      );
+      await TrackingDatabase.instance.insertTrackingPoint(firstPoint);
+      _pointsCount = 1;
+      _altitudeHistory.add(_lastRecordedPosition!.altitude);
+    }
 
     _status = TrackingStatus.tracking;
     _statusController.add(_status);
+    _broadcastCurrentStats();
 
-    // Langkah 2: Mulai timer stopwatch (update per 1 detik)
+    // Stopwatch timer.
     _durationTimer?.cancel();
-    _durationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_status == TrackingStatus.tracking) {
         _elapsedDuration = DateTime.now().difference(_startTime!);
         _broadcastCurrentStats();
       }
     });
 
-    // Langkah 3: Konfigurasi pengaturan Android Foreground Service & filter hemat baterai
+    // Location settings
     late final LocationSettings locationSettings;
-
     if (defaultTargetPlatform == TargetPlatform.android) {
       locationSettings = AndroidSettings(
-        accuracy: LocationAccuracy.high, // Akurasi tinggi berbasis satelit GPS
-        distanceFilter: 10, // Minimal perpindahan 10 meter (Hemat Baterai)
-        intervalDuration: const Duration(seconds: 15), // Polling interval 15 detik (Hemat Baterai)
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 0, // Catat setiap perubahan lokasi
+        intervalDuration: const Duration(seconds: 3),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'PuncakKu - Tracking Aktif',
-          notificationText: 'Melacak rute pendakian di background (layar mati tetap aktif)',
-          enableWakeLock: true, // Layar mati GPS tetap siaga
+          notificationTitle: 'PuncakKu - GPS Tracking Aktif',
+          notificationText: 'Merekam rute pendakian ke database PuncakKu',
+          enableWakeLock: true,
         ),
       );
     } else {
       locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+        distanceFilter: 0,
       );
     }
 
-    // Langkah 4: Aktifkan listener stream GPS terus-menerus
+    // Start GPS stream.
     _positionStream?.cancel();
     _positionStream = Geolocator.getPositionStream(
       locationSettings: locationSettings,
-    ).listen(_onNewPositionReceived);
+    ).listen(
+      _onNewPositionReceived,
+      onError: (err) {
+        debugPrint('Error pada getPositionStream: $err');
+      },
+    );
 
-    return _activeSessionId;
+    return _activeTrackingId;
   }
 
-  // ---------------------------------------------------------------------------
-  // [POIN PRESENTASI 7: PEMROSESAN TITIK GPS & PENYIMPANAN OTOMATIS]
-  // Penjelasan: "Setiap sinyal koordinat baru diterima dari satelit:
-  // 1. Jarak dihitung menggunakan Formula Haversine terhadap titik sebelumnya.
-  // 2. Ketinggian dicatat untuk mengakumulasi Elevation Gain.
-  // 3. Titik koordinat otomatis di-INSERT ke tabel SQLite."
-  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // Handle new GPS positions – inserts into `gps_tracking_points`
+  // ---------------------------------------------------------------
   Future<void> _onNewPositionReceived(Position position) async {
-    if (_status != TrackingStatus.tracking || _activeSessionId == null) {
+    if (_status != TrackingStatus.tracking || _activeTrackingId == null) {
       _lastRecordedPosition = position;
       _broadcastCurrentStats();
       return;
     }
 
-    // Kalkulasi jarak menggunakan rumus matematika Haversine
+    // Distance calculation.
     if (_lastRecordedPosition != null) {
       final distance = TrackingCalculator.calculateHaversineDistance(
         lat1: _lastRecordedPosition!.latitude,
@@ -203,92 +223,101 @@ class TrackingService {
         lat2: position.latitude,
         lon2: position.longitude,
       );
-
-      // Hanya tambahkan jika pergeseran >= 3 meter untuk membuang jitter/noise sinyal
-      if (distance >= 3.0) {
-        _totalDistanceMeters += distance;
-      }
+      if (distance >= 3.0) _totalDistanceMeters += distance;
     }
 
-    // Kalkulasi akumulasi tanjakan elevasi positif
+    // Elevation gain.
     _altitudeHistory.add(position.altitude);
     _elevationGainMeters = TrackingCalculator.calculateElevationGain(_altitudeHistory);
 
     _lastRecordedPosition = position;
+    _pointsCount++;
 
-    // Simpan koordinat ke database lokal SQLite
-    final point = LocationPointModel(
-      sessionId: _activeSessionId!,
+    final point = GpsTrackingPoint(
+      idTracking: _activeTrackingId!,
       latitude: position.latitude,
       longitude: position.longitude,
       altitude: position.altitude,
+      accuracy: position.accuracy,
       speed: position.speed,
-      timestamp: DateTime.now(),
+      recordedAt: DateTime.now(),
     );
-    await TrackingDatabase.instance.insertLocationPoint(point);
+    await TrackingDatabase.instance.insertTrackingPoint(point);
 
-    // Pancarkan data statistik terbaru ke UI
     _broadcastCurrentStats();
   }
 
-  // Fungsi jeda tracking (misal saat istirahat/makan di pos pendakian)
-  void pauseTracking() {
+  // ---------------------------------------------------------------
+  // Pause, resume, and stop tracking – update `gps_tracking` status.
+  // ---------------------------------------------------------------
+  Future<void> pauseTracking() async {
     if (_status == TrackingStatus.tracking) {
       _status = TrackingStatus.paused;
       _statusController.add(_status);
+      if (_activeTrackingId != null) {
+        await TrackingDatabase.instance.updateTrackingStatus(
+          idTracking: _activeTrackingId!,
+          status: 'dijeda',
+        );
+      }
     }
   }
 
-  // Fungsi melanjutkan kembali setelah jeda
-  void resumeTracking() {
+  Future<void> resumeTracking() async {
     if (_status == TrackingStatus.paused) {
       _status = TrackingStatus.tracking;
       _statusController.add(_status);
+      if (_activeTrackingId != null) {
+        await TrackingDatabase.instance.updateTrackingStatus(
+          idTracking: _activeTrackingId!,
+          status: 'berlangsung',
+        );
+      }
     }
   }
 
-  // Fungsi menghentikan tracking dan menyimpan rekapan akhir ke database SQLite
   Future<void> stopTracking() async {
     if (_status == TrackingStatus.stopped) return;
-
     _status = TrackingStatus.stopped;
     _statusController.add(_status);
     _positionStream?.cancel();
     _durationTimer?.cancel();
 
-    if (_activeSessionId != null) {
-      await TrackingDatabase.instance.updateSessionStats(
-        sessionId: _activeSessionId!,
-        totalDistance: _totalDistanceMeters,
-        elevationGain: _elevationGainMeters,
-        durationSeconds: _elapsedDuration.inSeconds,
-        endTime: DateTime.now(),
+    if (_activeTrackingId != null) {
+      final totalKm = _totalDistanceMeters / 1000.0;
+      await TrackingDatabase.instance.finishTracking(
+        idTracking: _activeTrackingId!,
+        totalJarakKm: totalKm,
+        durasiDetik: _elapsedDuration.inSeconds,
+        tanggalSelesai: DateTime.now(),
       );
     }
-
-    _activeSessionId = null;
+    _activeTrackingId = null;
   }
 
-  // Helper untuk mengirim objek statistik terkini ke Stream
+  // ---------------------------------------------------------------
+  // Broadcast stats to UI.
+  // ---------------------------------------------------------------
   void _broadcastCurrentStats() {
     if (_lastRecordedPosition == null) return;
-
     _statsController.add(
       TrackingStats(
+        idTracking: _activeTrackingId,
         currentLatitude: _lastRecordedPosition!.latitude,
         currentLongitude: _lastRecordedPosition!.longitude,
         currentAltitude: _lastRecordedPosition!.altitude,
         currentSpeed: _lastRecordedPosition!.speed,
-        totalDistance: _totalDistanceMeters,
+        totalDistanceMeters: _totalDistanceMeters,
+        totalDistanceKm: _totalDistanceMeters / 1000.0,
         elevationGain: _elevationGainMeters,
         duration: _elapsedDuration,
         accuracy: _lastRecordedPosition!.accuracy,
         heading: _lastRecordedPosition!.heading,
+        pointsCount: _pointsCount,
       ),
     );
   }
 
-  // Bersihkan resource saat service ditutup
   void dispose() {
     _positionStream?.cancel();
     _durationTimer?.cancel();
