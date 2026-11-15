@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/story.dart';
-import '../data/dummy_data.dart';
+import '../models/user_profile.dart';
+import '../services/api_service.dart';
 
 class TulisCeritaScreen extends StatefulWidget {
   final Function(StoryPost newPost) onStoryCreated;
@@ -19,6 +20,14 @@ class _TulisCeritaScreenState extends State<TulisCeritaScreen> {
   int _selectedImageIndex = 0;
   String _selectedMountain = 'Gunung Merbabu';
   bool _showError = false;
+  bool _isPublishing = false;
+
+  final List<String> _mountainImages = [
+    'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1200&q=80',
+  ];
 
   final List<String> _mountainOptions = [
     'Gunung Merbabu',
@@ -43,11 +52,11 @@ class _TulisCeritaScreenState extends State<TulisCeritaScreen> {
 
   void _cycleImage() {
     setState(() {
-      _selectedImageIndex = (_selectedImageIndex + 1) % sampleMountainImages.length;
+      _selectedImageIndex = (_selectedImageIndex + 1) % _mountainImages.length;
     });
   }
 
-  void _publishStory() {
+  void _publishStory() async {
     final caption = _captionController.text.trim();
     if (caption.isEmpty) {
       setState(() {
@@ -56,15 +65,36 @@ class _TulisCeritaScreenState extends State<TulisCeritaScreen> {
       return;
     }
 
+    setState(() => _isPublishing = true);
+
+    final currentUser = userProfileNotifier.value;
+    final userId = currentUser.id ?? 1;
     final mountainName = _selectedMountain.replaceFirst('Gunung ', '');
+    final selectedImage = _mountainImages[_selectedImageIndex];
+
+    // Simpan ke database MySQL Laragon
+    final fullCaption = "[$_selectedMountain] $caption";
+    final res = await ApiService.createPostingan(
+      userId: userId,
+      caption: fullCaption,
+      foto: selectedImage,
+    );
+
+    int? newId;
+    if (res['status'] == 'success' && res['data'] != null) {
+      newId = (res['data']['id_postingan'] as num?)?.toInt();
+    }
+
     final newPost = StoryPost(
-      id: 'post_${DateTime.now().millisecondsSinceEpoch}',
-      authorName: 'Alya Putri',
-      authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+      id: newId?.toString() ?? 'post_${DateTime.now().millisecondsSinceEpoch}',
+      rawIdPostingan: newId,
+      rawIdUser: userId,
+      authorName: currentUser.name,
+      authorAvatar: currentUser.avatarUrl,
       mountain: mountainName,
-      date: 'Hari ini · Data contoh',
+      date: 'Baru saja',
       content: caption,
-      imageUrl: sampleMountainImages[_selectedImageIndex],
+      imageUrl: selectedImage,
       likesCount: 0,
       isLiked: false,
       category: 'Terbaru',
@@ -73,15 +103,19 @@ class _TulisCeritaScreenState extends State<TulisCeritaScreen> {
     );
 
     widget.onStoryCreated(newPost);
-    Navigator.pop(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Cerita berhasil diterbitkan!'),
-        backgroundColor: Color(0xFF1B4D3E),
-        duration: Duration(seconds: 2),
-      ),
-    );
+    if (mounted) {
+      setState(() => _isPublishing = false);
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cerita berhasil diterbitkan ke database!'),
+          backgroundColor: Color(0xFF1B4D3E),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -100,299 +134,166 @@ class _TulisCeritaScreenState extends State<TulisCeritaScreen> {
           'Tulis cerita',
           style: TextStyle(
             color: Color(0xFF182A22),
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
       ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Simulation account pill
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F1EC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Simulasi akun - Alya Putri',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF2A5944),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Pilihan Gunung Dropdown
+            const Text(
+              'Pilih Gunung',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF182A22),
               ),
-              const SizedBox(height: 14),
-
-              // Title
-              const Text(
-                'Cerita kecilmu bisa\nmembantu pendaki lain.',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF182A22),
-                  height: 1.25,
-                ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
               ),
-              const SizedBox(height: 20),
-
-              // Photo Section Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Foto perjalanan',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF182A22),
-                    ),
-                  ),
-                  InkWell(
-                    onTap: _cycleImage,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-                      child: Text(
-                        'Ganti / hapus',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF1B4D3E),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              // Photo Preview
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  height: 180,
-                  width: double.infinity,
-                  color: Colors.grey.shade200,
-                  child: Image.network(
-                    sampleMountainImages[_selectedImageIndex],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: Colors.grey.shade300,
-                      child: const Center(
-                        child: Icon(Icons.image, size: 48, color: Colors.grey),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Simulasi unggahan · 100% · foto-contoh-${_selectedImageIndex + 1}.jpg',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Gunung dropdown
-              const Text(
-                'Gunung (opsional)',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF182A22),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedMountain,
-                    isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
-                    items: _mountainOptions.map((mountain) {
-                      return DropdownMenuItem<String>(
-                        value: mountain,
-                        child: Text(
-                          mountain,
-                          style: const TextStyle(fontSize: 14, color: Color(0xFF182A22)),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _selectedMountain = val;
-                        });
-                      }
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Caption input
-              const Text(
-                'Caption cerita',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF182A22),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _showError ? Colors.red.shade400 : Colors.grey.shade300,
-                    width: _showError ? 1.5 : 1,
-                  ),
-                ),
-                child: TextField(
-                  controller: _captionController,
-                  maxLines: 4,
-                  maxLength: 1000,
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedMountain,
+                  isExpanded: true,
+                  icon: const Icon(Icons.keyboard_arrow_down),
+                  items: _mountainOptions.map((mountain) {
+                    return DropdownMenuItem(
+                      value: mountain,
+                      child: Text(mountain, style: const TextStyle(fontSize: 14)),
+                    );
+                  }).toList(),
                   onChanged: (val) {
-                    if (_showError && val.trim().isNotEmpty) {
-                      setState(() {
-                        _showError = false;
-                      });
-                    } else {
-                      setState(() {});
+                    if (val != null) {
+                      setState(() => _selectedMountain = val);
                     }
                   },
-                  decoration: const InputDecoration(
-                    hintText: 'Apa yang kamu pelajari di perjalanan ini?',
-                    hintStyle: TextStyle(fontSize: 13.5, color: Colors.grey),
-                    contentPadding: EdgeInsets.all(14),
-                    border: InputBorder.none,
-                    counterText: '',
-                  ),
                 ),
               ),
+            ),
+            const SizedBox(height: 16),
 
-              if (_showError) ...[
-                const SizedBox(height: 4),
-                const Text(
-                  'Caption wajib diisi sebelum cerita diterbitkan.',
-                  style: TextStyle(fontSize: 11, color: Colors.red),
+            // Caption Text Field
+            const Text(
+              'Cerita Anda',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF182A22),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _showError ? Colors.red : Colors.grey.shade300,
+                ),
+              ),
+              child: TextField(
+                controller: _captionController,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  hintText: 'Tuliskan pengalaman, pelajaran, atau tips dari pendakian ini...',
+                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(14),
+                ),
+              ),
+            ),
+            if (_showError)
+              const Padding(
+                padding: EdgeInsets.only(top: 4.0),
+                child: Text(
+                  'Cerita tidak boleh kosong',
+                  style: TextStyle(color: Colors.red, fontSize: 11),
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // Foto Pendakian Preview & Ganti
+            const Text(
+              'Foto Pendakian',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF182A22),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    _mountainImages[_selectedImageIndex],
+                    width: double.infinity,
+                    height: 200,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black.withValues(alpha: 0.65),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Ganti Foto', style: TextStyle(fontSize: 12)),
+                    onPressed: _cycleImage,
+                  ),
                 ),
               ],
+            ),
+            const SizedBox(height: 28),
 
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${_captionController.text.length} / 1.000 karakter',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            // Tombol Publikasikan
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primaryDark,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-
-              // Responsible sharing banner
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEBF3EE),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.info_outline,
-                      color: Color(0xFF2D5A46),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Berbagi dengan bertanggung jawab',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1B4D3E),
-                            ),
-                          ),
-                          SizedBox(height: 3),
-                          Text(
-                            'Hindari informasi kondisi jalur yang belum diverifikasi. Unggahan ini hanya simulasi, tidak dikirim ke server.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF355E4E),
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
+                onPressed: _isPublishing ? null : _publishStory,
+                child: _isPublishing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Publikasikan Cerita',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                       ),
-                    ),
-                  ],
-                ),
               ),
-              const SizedBox(height: 20),
-
-              // Terbitkan cerita button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primaryDark,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    elevation: 0,
-                  ),
-                  onPressed: _publishStory,
-                  child: const Text(
-                    'Terbitkan cerita · simulasi',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Batal button
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _primaryDark,
-                    side: BorderSide(color: Colors.grey.shade300),
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Batal · kembali ke cerita',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 28),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
