@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "695923825114",
+    "project_id": "puncakku-b6b1d",
+    "storage_bucket": "puncakku-b6b1d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:695923825114:android:596609011c57fe56fd88e3",
+        "android_client_info": {
+          "package_name": "com.example.PuncakKu"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "695923825114-u35u8jgqdjbk6dvgu44ia1bn5089g92g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.PuncakKu",
+            "certificate_hash": "3432264604a622b1ae575ea10720fd49a31e5231"
+          }
+        },
+        {
+          "client_id": "695923825114-s3r9hu7r0e40alqvd2jmjfrrad660gqd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgR0CcO7Bq8851X59rKtPGOxkYXR9ml8k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "695923825114-s3r9hu7r0e40alqvd2jmjfrrad660gqd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

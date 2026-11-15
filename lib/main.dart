@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
+
 import 'screens/persiapan/persiapan_hub_screen.dart';
 import 'screens/placeholder_screens.dart';
 import 'screens/gunung/cari_gunung_screen.dart';
 import 'state/pendaki_state.dart';
 
 void main() {
+
+import 'package:firebase_core/firebase_core.dart';
+import 'screens/login_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase init notice: $e');
+  }
+
   runApp(const MyApp());
 }
 
@@ -27,6 +40,7 @@ class MyApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFFF7F9F8),
       ),
+
       home: const MainNavigationScreen(),
     );
   }
@@ -162,6 +176,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
       ),
+=======
+      home: const LoginScreen(),
+
     );
   }
 }
