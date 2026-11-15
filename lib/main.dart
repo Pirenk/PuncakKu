@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/persiapan/persiapan_hub_screen.dart';
 import 'screens/placeholder_screens.dart';
+import 'screens/gunung/cari_gunung_screen.dart';
 import 'state/pendaki_state.dart';
 
 void main() {
@@ -68,10 +69,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         icon: Icons.home_outlined,
         subtitle: 'Jelajahi panduan pendakian, tips keselamatan, dan info cuaca gunung.',
       ),
-      const PlaceholderScreen(
-        title: 'Gunung',
-        icon: Icons.landscape_outlined,
-        subtitle: 'Informasi jalur resmi, pos pendakian, dan kuota tiket gunung di Jawa Tengah.',
+      CariGunungScreen(
+        state: _pendakiState,
+        onSwitchTab: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
       ),
       PersiapanHubScreen(state: _pendakiState),
       const PlaceholderScreen(

@@ -263,9 +263,34 @@ class _RencanaPendakianScreenState extends State<RencanaPendakianScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                onPressed: () {
+                onPressed: () async {
                   _saveToState();
-                  widget.state.handleRencanaContinue();
+                  
+                  // Tampilkan indikator loading saat memproses ke database
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (c) => const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF1B4D3E)),
+                    ),
+                  );
+
+                  try {
+                    await widget.state.handleRencanaContinue();
+                    if (context.mounted) {
+                      Navigator.pop(context); // Tutup loading dialog
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Gagal membuat rekomendasi: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 },
                 child: Text(
                   _jumlahAnggota == 1

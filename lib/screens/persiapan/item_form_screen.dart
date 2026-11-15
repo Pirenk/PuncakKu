@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../models/checklist_item.dart';
 import '../../state/pendaki_state.dart';
+import 'package:mobile_pendakian/services/api_service.dart';
 
 class ItemFormScreen extends StatefulWidget {
   final PendakiState state;
   final ChecklistItem? itemToEdit;
 
-  const ItemFormScreen({
-    super.key,
-    required this.state,
-    this.itemToEdit,
-  });
+  const ItemFormScreen({super.key, required this.state, this.itemToEdit});
 
   @override
   State<ItemFormScreen> createState() => _ItemFormScreenState();
@@ -35,7 +32,8 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
     _kategori = it?.kategori ?? ItemCategory.wajib;
 
     if (widget.state.isGroupMode) {
-      _selectedPenanggungJawab = it?.penanggungJawab ?? widget.state.activeUsername;
+      _selectedPenanggungJawab =
+          it?.penanggungJawab ?? widget.state.activeUsername;
     }
   }
 
@@ -47,7 +45,25 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
     super.dispose();
   }
 
-  void _saveItem() {
+  Map<String, dynamic> _parseJumlah(String input) {
+    final teks = input.trim();
+
+    final hasil = RegExp(r'^(\d+)\s*(.*)$').firstMatch(teks);
+
+    if (hasil == null) {
+      return {'jumlah': 1, 'satuan': 'buah'};
+    }
+
+    return {
+      'jumlah': int.parse(hasil.group(1)!),
+      'satuan': hasil.group(2)!.trim().isEmpty
+          ? 'buah'
+          : hasil.group(2)!.trim(),
+    };
+  }
+
+  Future<void> _saveItem() async {
+
     final nama = _namaController.text.trim();
     if (nama.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -56,38 +72,110 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
       return;
     }
 
-    final jumlah = _jumlahController.text.trim().isEmpty
+    final jumlahTeks = _jumlahController.text.trim().isEmpty
         ? '1 buah'
         : _jumlahController.text.trim();
 
+    final hasilJumlah = _parseJumlah(jumlahTeks);
+    final jumlah = '${hasilJumlah['jumlah']} ${hasilJumlah['satuan']}';
+
     if (widget.itemToEdit != null) {
-      final updated = widget.itemToEdit!.copyWith(
+  try {
+    int? pjId;
+    String? pjNama;
+    if (widget.state.isGroupMode && _selectedPenanggungJawab != null) {
+      final match = widget.state.groupMembersFromApi.where(
+        (m) => m['username'].toString().toLowerCase() == _selectedPenanggungJawab!.toLowerCase(),
+      );
+      if (match.isNotEmpty) {
+        pjId = int.tryParse(match.first['user_id']?.toString() ?? match.first['trip_member_id'].toString());
+        pjNama = match.first['nama'].toString();
+      }
+    }
+
+    await ApiService.updateChecklist(
+      id: int.parse(widget.itemToEdit!.id),
+      nama: nama,
+      jumlah: hasilJumlah['jumlah'],
+      satuan: hasilJumlah['satuan'],
+      kategori: _kategori == ItemCategory.wajib ? 'wajib' : 'opsional',
+    );
+
+    if (pjId != null) {
+      await ApiService.updateChecklistAssignee(
+        id: int.parse(widget.itemToEdit!.id),
+        penanggungJawabId: pjId,
         nama: nama,
-        jumlah: jumlah,
-        kategori: _kategori,
-        catatan: _catatanController.text.trim(),
-        penanggungJawab: widget.state.isGroupMode ? _selectedPenanggungJawab : null,
-      );
-      widget.state.updateItem(updated);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Perubahan barang berhasil disimpan.')),
-      );
-    } else {
-      final newItem = ChecklistItem(
-        id: 'item_${DateTime.now().millisecondsSinceEpoch}',
-        nama: nama,
-        jumlah: jumlah,
-        kategori: _kategori,
-        catatan: _catatanController.text.trim(),
-        isChecked: false,
-        penanggungJawab: widget.state.isGroupMode ? _selectedPenanggungJawab : null,
-        isKelompok: widget.state.isGroupMode,
-      );
-      widget.state.addItem(newItem);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Perlengkapan baru berhasil ditambahkan.')),
+        jumlah: hasilJumlah['jumlah'],
+        satuan: hasilJumlah['satuan'],
+        kategori: _kategori == ItemCategory.wajib ? 'wajib' : 'opsional',
       );
     }
+
+    final updated = widget.itemToEdit!.copyWith(
+      nama: nama,
+      jumlah: jumlah,
+      kategori: _kategori,
+      catatan: _catatanController.text.trim(),
+      penanggungJawab: widget.state.isGroupMode ? (pjNama ?? _selectedPenanggungJawab) : null,
+      penanggungJawabId: pjId ?? widget.itemToEdit!.penanggungJawabId,
+    );
+
+    widget.state.updateItem(updated);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Perubahan barang berhasil disimpan.'),
+      ),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Gagal memperbarui perlengkapan: $e'),
+      ),
+    );
+    return;
+  }
+} else {
+  try {
+    int? pjId;
+    if (widget.state.isGroupMode && _selectedPenanggungJawab != null) {
+      final match = widget.state.groupMembersFromApi.where(
+        (m) => m['username'].toString().toLowerCase() == _selectedPenanggungJawab!.toLowerCase(),
+      );
+      if (match.isNotEmpty) {
+        pjId = int.tryParse(match.first['user_id']?.toString() ?? match.first['trip_member_id'].toString());
+      }
+    }
+
+    await widget.state.addManualChecklistItem(
+      nama: nama,
+      jumlah: hasilJumlah['jumlah'] as int,
+      satuan: hasilJumlah['satuan'] as String,
+      kategori: _kategori,
+      catatan: _catatanController.text.trim(),
+      isKelompok: widget.state.isGroupMode,
+      penanggungJawabId: pjId,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Perlengkapan berhasil disimpan ke database.'),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Gagal menyimpan perlengkapan: $e'),
+      ),
+    );
+    return;
+  }
+}
 
     Navigator.pop(context);
   }
@@ -123,10 +211,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
             // Subtitle like mockup: "Merbabu · Lampu kepala"
             Text(
               '${plan.gunung.replaceAll("Gunung ", "")} · ${isEditing ? widget.itemToEdit!.nama : "Barang baru"}',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade600,
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 12),
 
@@ -202,12 +287,18 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                   child: DropdownButton<String>(
                     value: _selectedPenanggungJawab,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
-                    items: widget.state.acceptedUsernames.map((u) {
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: Colors.grey,
+                    ),
+                    items: widget.state.groupMembersFromApi.map((m) {
+                      final u = m['username'].toString();
+                      final nama = m['nama'].toString();
+                      final isK = m['role'].toString().toLowerCase() == 'ketua';
                       return DropdownMenuItem<String>(
                         value: u,
                         child: Text(
-                          '@$u ${u == "ryan" ? "(Ketua)" : "(Anggota)"}',
+                          '@$u ($nama - ${isK ? "Ketua" : "Anggota"})',
                           style: const TextStyle(
                             fontSize: 14,
                             color: Color(0xFF182A22),
@@ -266,7 +357,10 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                 onPressed: _saveItem,
                 child: Text(
                   isEditing ? 'Simpan perubahan barang' : 'Tambah perlengkapan',
-                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -325,7 +419,10 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: Colors.grey, fontSize: 13.5),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
           border: InputBorder.none,
         ),
       ),

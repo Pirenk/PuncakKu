@@ -51,11 +51,7 @@ class ChecklistCard extends StatelessWidget {
                   ),
                 ),
                 child: item.isChecked
-                    ? const Icon(
-                        Icons.check,
-                        size: 16,
-                        color: Colors.white,
-                      )
+                    ? const Icon(Icons.check, size: 16, color: Colors.white)
                     : null,
               ),
             ),
@@ -97,10 +93,15 @@ class ChecklistCard extends StatelessWidget {
                   ),
 
                   // Penanggung Jawab badge if assigned
-                  if (item.penanggungJawab != null && item.penanggungJawab!.isNotEmpty) ...[
+                  if (item.penanggungJawab != null &&
+                      item.penanggungJawab!.isNotEmpty) ...[
+                    // Penanggung Jawab
                     const SizedBox(height: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFEBF3EE),
                         borderRadius: BorderRadius.circular(5),
@@ -115,7 +116,10 @@ class ChecklistCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 3),
                           Text(
-                            'PJ: @${item.penanggungJawab}',
+                            item.penanggungJawab != null &&
+                                    item.penanggungJawab!.isNotEmpty
+                                ? 'PJ: ${item.penanggungJawab}'
+                                : 'Belum dibagikan',
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -133,20 +137,32 @@ class ChecklistCard extends StatelessWidget {
             // Actions (Edit, Delete, or Request Change)
             if (isEditMode && canEdit) ...[
               IconButton(
-                icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey.shade600),
+                icon: Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: Colors.grey.shade600,
+                ),
                 onPressed: onEdit,
                 splashRadius: 18,
                 tooltip: 'Ubah perlengkapan',
               ),
               IconButton(
-                icon: Icon(Icons.delete_outline, size: 20, color: Colors.grey.shade600),
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: Colors.grey.shade600,
+                ),
                 onPressed: onDelete,
                 splashRadius: 18,
                 tooltip: 'Hapus perlengkapan',
               ),
             ] else if (onRequestChange != null) ...[
               IconButton(
-                icon: Icon(Icons.flag_outlined, size: 19, color: Colors.grey.shade600),
+                icon: Icon(
+                  Icons.flag_outlined,
+                  size: 19,
+                  color: Colors.grey.shade600,
+                ),
                 onPressed: onRequestChange,
                 splashRadius: 18,
                 tooltip: 'Ajukan permintaan perubahan ke Ketua',

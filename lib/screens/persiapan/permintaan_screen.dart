@@ -82,7 +82,11 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, color: Color(0xFF1B4D3E), size: 20),
+                  const Icon(
+                    Icons.info_outline,
+                    color: Color(0xFF1B4D3E),
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -122,7 +126,10 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
 
             if (requests.isEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 40,
+                  horizontal: 20,
+                ),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -131,7 +138,11 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
                 ),
                 child: Column(
                   children: [
-                    Icon(Icons.inbox_outlined, size: 48, color: Colors.grey.shade400),
+                    Icon(
+                      Icons.inbox_outlined,
+                      size: 48,
+                      color: Colors.grey.shade400,
+                    ),
                     const SizedBox(height: 12),
                     const Text(
                       'Belum ada permintaan perubahan',
@@ -144,7 +155,10 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
                     const SizedBox(height: 6),
                     Text(
                       'Anggota dapat mengusulkan perubahan perlengkapan kapan saja.',
-                      style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade600,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -155,7 +169,8 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: requests.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final req = requests[index];
                   return _buildRequestCard(req, isKetua);
@@ -175,7 +190,9 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: req.isMenunggu ? const Color(0xFFFDE68A) : Colors.grey.shade300,
+          color: req.isMenunggu
+              ? const Color(0xFFFDE68A)
+              : Colors.grey.shade300,
           width: req.isMenunggu ? 1.2 : 1,
         ),
       ),
@@ -229,12 +246,18 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
                   if (req.jumlahBaru != null)
                     Text(
                       'Jumlah baru: ${req.jumlahBaru}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   if (req.catatanBaru != null && req.catatanBaru!.isNotEmpty)
                     Text(
                       'Catatan baru: ${req.catatanBaru}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
                     ),
                 ],
               ),
@@ -268,13 +291,31 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
-                    onPressed: () {
-                      widget.state.rejectChangeRequest(req.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Permintaan perubahan ditolak.')),
-                      );
+                    onPressed: () async {
+                      try {
+                        await widget.state.rejectChangeRequest(req.id);
+
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Permintaan perubahan ditolak.'),
+                          ),
+                        );
+                      } catch (e) {
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Gagal menolak permintaan: $e'),
+                          ),
+                        );
+                      }
                     },
-                    child: const Text('Tolak Usulan', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'Tolak Usulan',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -289,16 +330,34 @@ class _PermintaanScreenState extends State<PermintaanScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       elevation: 0,
                     ),
-                    onPressed: () {
-                      widget.state.approveChangeRequest(req.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Permintaan disetujui! Data checklist telah diperbarui.'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
+                    onPressed: () async {
+                      try {
+                        await widget.state.approveChangeRequest(req.id);
+
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Permintaan disetujui! Data checklist telah diperbarui.',
+                            ),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      } catch (e) {
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Gagal menyetujui permintaan: $e'),
+                          ),
+                        );
+                      }
                     },
-                    child: const Text('Setujui Usulan', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'Setujui Usulan',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ],
@@ -338,37 +397,45 @@ class _NewRequestModalState extends State<_NewRequestModal> {
     super.dispose();
   }
 
-  void _submit() {
-    String namaBarang = '';
-    if (_jenis == RequestType.tambah) {
-      namaBarang = _namaController.text.trim();
-      if (namaBarang.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nama perlengkapan harus diisi.')),
-        );
-        return;
-      }
-    } else {
-      if (_selectedItemId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pilih perlengkapan yang ingin diubah/dihapus.')),
-        );
-        return;
-      }
-      final target =
-          widget.state.items.firstWhere((it) => it.id == _selectedItemId);
-      namaBarang = target.nama;
-    }
+  Future<void> _submit() async {
+  String namaBarang = '';
 
-    final alasan = _alasanController.text.trim();
-    if (alasan.isEmpty) {
+  if (_jenis == RequestType.tambah) {
+    namaBarang = _namaController.text.trim();
+
+    if (namaBarang.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Harap sertakan alasan permintaan.')),
+        const SnackBar(content: Text('Nama perlengkapan harus diisi.')),
+      );
+      return;
+    }
+  } else {
+    if (_selectedItemId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pilih perlengkapan yang ingin diubah/dihapus.'),
+        ),
       );
       return;
     }
 
-    widget.state.submitChangeRequest(
+    final target = widget.state.items.firstWhere(
+      (it) => it.id == _selectedItemId,
+    );
+    namaBarang = target.nama;
+  }
+
+  final alasan = _alasanController.text.trim();
+
+  if (alasan.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Harap sertakan alasan permintaan.')),
+    );
+    return;
+  }
+
+  try {
+    await widget.state.submitChangeRequest(
       jenis: _jenis,
       targetItemId: _selectedItemId,
       namaPerlengkapan: namaBarang,
@@ -381,14 +448,27 @@ class _NewRequestModalState extends State<_NewRequestModal> {
       alasan: alasan,
     );
 
+    if (!mounted) return;
+
+    // Simpan messenger sebelum modal ditutup.
+    final messenger = ScaffoldMessenger.of(context);
+
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+
+    messenger.showSnackBar(
       const SnackBar(
         content: Text('Permintaan berhasil diajukan kepada Ketua kelompok.'),
         duration: Duration(seconds: 2),
       ),
     );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gagal mengajukan permintaan: $e')),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -479,8 +559,9 @@ class _NewRequestModalState extends State<_NewRequestModal> {
                       setState(() {
                         _selectedItemId = val;
                         if (val != null && _jenis == RequestType.ubah) {
-                          final item =
-                              widget.state.items.firstWhere((it) => it.id == val);
+                          final item = widget.state.items.firstWhere(
+                            (it) => it.id == val,
+                          );
                           _jumlahController.text = item.jumlah;
                           _catatanController.text = item.catatan;
                         }

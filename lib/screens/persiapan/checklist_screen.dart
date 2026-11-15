@@ -17,8 +17,136 @@ class ChecklistScreen extends StatefulWidget {
 }
 
 class _ChecklistScreenState extends State<ChecklistScreen> {
-  bool _isEditMode = true; // Can toggle between edit mode (Page 2) and view mode (Page 3)
+  bool _isEditMode =
+      true; // Can toggle between edit mode (Page 2) and view mode (Page 3)
   final Color _primaryDark = const Color(0xFF1B4D3E);
+
+  // Dialog untuk mengatur pembagian perlengkapan
+  void _showAssignmentDialog() {
+    final members = widget.state.groupMembersFromApi;
+
+    if (members.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Belum ada anggota kelompok yang diterima.'),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text(
+                'Atur Pembagian Perlengkapan',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Color(0xFF182A22),
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: widget.state.items.map((item) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.nama,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Color(0xFF182A22),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<int>(
+                            value: item.penanggungJawabId,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Penanggung jawab',
+                              labelStyle: const TextStyle(fontSize: 13),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                            ),
+                            items: members.map((member) {
+                              return DropdownMenuItem<int>(
+                                value: int.parse(
+                                  member['user_id']?.toString() ??
+                                      member['trip_member_id'].toString(),
+                                ),
+                                child: Text(
+                                  '${member['nama']} (${member['role'] == "ketua" ? "Ketua" : "Anggota"})',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) async {
+                              if (value == null) return;
+
+                              try {
+                                await widget.state.assignChecklistItem(
+                                  itemId: item.id,
+                                  tripMemberId: value,
+                                );
+
+                                setDialogState(() {});
+                              } catch (e) {
+                                if (!context.mounted) return;
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Gagal membagi perlengkapan: $e',
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text(
+                    'Selesai',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B4D3E),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   void _showFilterSheet() {
     showModalBottomSheet(
@@ -55,9 +183,24 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _buildFilterOption('semua', 'Semua Perlengkapan', currentFilter, ctx),
-                _buildFilterOption('belum_siap', 'Hanya Belum Siap', currentFilter, ctx),
-                _buildFilterOption('wajib', 'Hanya Barang Wajib', currentFilter, ctx),
+                _buildFilterOption(
+                  'semua',
+                  'Semua Perlengkapan',
+                  currentFilter,
+                  ctx,
+                ),
+                _buildFilterOption(
+                  'belum_siap',
+                  'Hanya Belum Siap',
+                  currentFilter,
+                  ctx,
+                ),
+                _buildFilterOption(
+                  'wajib',
+                  'Hanya Barang Wajib',
+                  currentFilter,
+                  ctx,
+                ),
                 if (widget.state.isGroupMode)
                   _buildFilterOption(
                     'tugas_saya',
@@ -108,9 +251,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         return items.where((it) => it.isWajib).toList();
       case 'tugas_saya':
         return items
-            .where((it) =>
-                it.penanggungJawab?.toLowerCase() ==
-                widget.state.activeUsername.toLowerCase())
+            .where(
+              (it) =>
+                  it.penanggungJawab?.toLowerCase() ==
+                  widget.state.activeUsername.toLowerCase(),
+            )
             .toList();
       default:
         return items;
@@ -185,7 +330,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 InkWell(
                   onTap: () {
                     // Navigate back to plan editor
-                    widget.state.navigateToSubScreen(PersiapanSubScreen.rencana);
+                    widget.state.navigateToSubScreen(
+                      PersiapanSubScreen.rencana,
+                    );
                   },
                   child: Text(
                     'Ubah rencana',
@@ -202,11 +349,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
             // Subtitle info
             Text(
-              '${plan.jenisString} · ${plan.durasi} · ${plan.jumlahAnggota} orang · Rekomendasi awal',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-              ),
+              '${plan.jenisString} · ${plan.durasi} · ${plan.jumlahAnggota} orang',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 14),
 
@@ -217,7 +361,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             if (isGroup && !group.isAllAccepted) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF3C7),
                   borderRadius: BorderRadius.circular(12),
@@ -250,7 +397,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             if (widget.state.checklistFilter != 'semua') ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEBF3EE),
                   borderRadius: BorderRadius.circular(8),
@@ -269,7 +419,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     const SizedBox(width: 6),
                     GestureDetector(
                       onTap: () => widget.state.setChecklistFilter('semua'),
-                      child: const Icon(Icons.close, size: 16, color: Color(0xFF1B4D3E)),
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Color(0xFF1B4D3E),
+                      ),
                     ),
                   ],
                 ),
@@ -277,10 +431,20 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ],
 
             // Progress Card
-            ProgressCard(
-              totalCount: allItems.length,
-              readyCount: totalReady,
-              hasUnreadyMandatory: unreadyMandatory.isNotEmpty,
+            Builder(
+              builder: (context) {
+                String? pjSummary;
+                if (isGroup) {
+                  final assignedCount = allItems.where((it) => it.penanggungJawab != null && it.penanggungJawab!.isNotEmpty).length;
+                  pjSummary = 'Penanggung Jawab: $assignedCount dari ${allItems.length} barang telah dibagi';
+                }
+                return ProgressCard(
+                  totalCount: allItems.length,
+                  readyCount: totalReady,
+                  hasUnreadyMandatory: unreadyMandatory.isNotEmpty,
+                  penanggungJawabInfo: pjSummary,
+                );
+              },
             ),
 
             // Warning Alert Card (when mandatory items are unready)
@@ -316,8 +480,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       isEditMode: _isEditMode,
                       canEdit: isKetua || !isGroup,
                       canToggle: widget.state.canToggleItem(item),
-                      onToggle: () {
-                        final errMsg = widget.state.toggleItemCheck(item.id);
+                      onToggle: () async {
+                        final errMsg = await widget.state.toggleItemCheck(
+                          item.id,
+                        );
+
+                        if (!context.mounted) return;
+
                         if (errMsg != null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -338,19 +507,33 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                           ),
                         );
                       },
-                      onDelete: () {
-                        widget.state.deleteItem(item.id);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${item.nama} telah dihapus.'),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
+                      onDelete: () async {
+                        try {
+                          await widget.state.deleteItem(item.id);
+
+                          if (!context.mounted) return;
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('${item.nama} telah dihapus.'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Gagal menghapus perlengkapan.'),
+                            ),
+                          );
+                        }
                       },
                       onRequestChange: !isKetua && isGroup
                           ? () {
                               widget.state.navigateToSubScreen(
-                                  PersiapanSubScreen.permintaan);
+                                PersiapanSubScreen.permintaan,
+                              );
                             }
                           : null,
                     );
@@ -387,8 +570,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       isEditMode: _isEditMode,
                       canEdit: isKetua || !isGroup,
                       canToggle: widget.state.canToggleItem(item),
-                      onToggle: () {
-                        final errMsg = widget.state.toggleItemCheck(item.id);
+                      onToggle: () async {
+                        final errMsg = await widget.state.toggleItemCheck(
+                          item.id,
+                        );
+
+                        if (!context.mounted) return;
+
                         if (errMsg != null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -409,19 +597,33 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                           ),
                         );
                       },
-                      onDelete: () {
-                        widget.state.deleteItem(item.id);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${item.nama} telah dihapus.'),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
+                      onDelete: () async {
+                        try {
+                          await widget.state.deleteItem(item.id);
+
+                          if (!context.mounted) return;
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('${item.nama} telah dihapus.'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Gagal menghapus perlengkapan.'),
+                            ),
+                          );
+                        }
                       },
                       onRequestChange: !isKetua && isGroup
                           ? () {
                               widget.state.navigateToSubScreen(
-                                  PersiapanSubScreen.permintaan);
+                                PersiapanSubScreen.permintaan,
+                              );
                             }
                           : null,
                     );
@@ -480,13 +682,43 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       ),
                     ),
                     onPressed: () {
-                      widget.state.navigateToSubScreen(PersiapanSubScreen.permintaan);
+                      widget.state.navigateToSubScreen(
+                        PersiapanSubScreen.permintaan,
+                      );
                     },
                     icon: const Icon(Icons.add_comment_outlined, size: 18),
                     label: const Text(
                       '+ Ajukan Tambah Perlengkapan ke Ketua',
                       style: TextStyle(
                         fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Tombol Atur Pembagian Perlengkapan (khusus ketua kelompok)
+              if (isGroup && isKetua) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _primaryDark,
+                      backgroundColor: Colors.white,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: _showAssignmentDialog,
+                    icon: const Icon(Icons.assignment_ind_outlined, size: 18),
+                    label: const Text(
+                      'Atur Pembagian Perlengkapan',
+                      style: TextStyle(
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -521,10 +753,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   },
                   child: const Text(
                     'Simpan',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -549,10 +778,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   },
                   child: const Text(
                     'Edit',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

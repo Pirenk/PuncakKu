@@ -4,12 +4,14 @@ class ProgressCard extends StatelessWidget {
   final int totalCount;
   final int readyCount;
   final bool hasUnreadyMandatory;
+  final String? penanggungJawabInfo;
 
   const ProgressCard({
     super.key,
     required this.totalCount,
     required this.readyCount,
     required this.hasUnreadyMandatory,
+    this.penanggungJawabInfo,
   });
 
   @override
@@ -76,6 +78,35 @@ class ProgressCard extends StatelessWidget {
               color: Color(0xFF355E4E),
             ),
           ),
+          if (penanggungJawabInfo != null && penanggungJawabInfo!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.assignment_ind_outlined, size: 14, color: Color(0xFF1B4D3E)),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      penanggungJawabInfo!,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1B4D3E),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

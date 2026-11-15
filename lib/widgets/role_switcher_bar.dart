@@ -46,7 +46,7 @@ class RoleSwitcherBar extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      isKetua ? 'Ketua (@ryan)' : 'Anggota (@${state.activeUsername})',
+                      '${isKetua ? 'Ketua' : 'Anggota'} (@${state.activeUsername})',
                       style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.bold,
@@ -99,96 +99,148 @@ class RoleSwitcherBar extends StatelessWidget {
   }
 
   void _showRolePicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        final accepted = state.group.acceptedMembers;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Pilih Peran untuk Simulasi',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF182A22),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Uji coba hak akses sebagai Ketua atau Anggota kelompok.',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 14),
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      final accepted = state.groupMembersFromApi;
 
-                // Ketua Option
+      final ketua = accepted.where(
+        (m) => m['role'].toString().toLowerCase() == 'ketua',
+      ).toList();
+
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              const Text(
+                'Pilih Peran untuk Simulasi',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF182A22),
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              Text(
+                'Uji coba hak akses sebagai Ketua atau Anggota kelompok.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Pilihan Ketua
+              if (ketua.isNotEmpty)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF1B4D3E),
-                    child: Icon(Icons.admin_panel_settings, color: Colors.white, size: 20),
+                    child: Icon(
+                      Icons.admin_panel_settings,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
-                  title: const Text('Ryan (Ketua)', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Akses penuh kelola barang & persetujuan'),
+                  title: Text(
+                    '${ketua.first['nama']} (Ketua)',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: Text('@${ketua.first['username']}'),
                   trailing: state.isCurrentKetua
-                      ? const Icon(Icons.check_circle, color: Color(0xFF1B4D3E))
+                      ? const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF1B4D3E),
+                        )
                       : null,
                   onTap: () {
-                    state.setActivePersona('ryan');
+                    state.setActivePersona(
+                      ketua.first['username'].toString(),
+                    );
                     Navigator.pop(ctx);
                   },
                 ),
-                const Divider(),
 
-                // Accepted Members
-                ...accepted.where((m) => !m.isKetua).map((m) {
-                  final isSelected = state.activeUsername == m.username;
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blue.shade100,
-                      child: Text(
-                        m.username[0].toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+              const Divider(),
+
+              // Pilihan Anggota
+              ...accepted
+                  .where(
+                    (m) =>
+                        m['role'].toString().toLowerCase() != 'ketua',
+                  )
+                  .map((m) {
+                final username = m['username'].toString();
+                final nama = m['nama'].toString();
+
+                final isSelected =
+                    state.activeUsername.toLowerCase() ==
+                        username.toLowerCase();
+
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue.shade100,
+                    child: Text(
+                      username.isNotEmpty
+                          ? username[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
                       ),
                     ),
-                    title: Text(
-                      '${m.nama} (@${m.username})',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  title: Text(
+                    '$nama (@$username)',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
                     ),
-                    subtitle: const Text('Hanya centang tugas sendiri & kirim permintaan'),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_circle, color: Color(0xFF1B4D3E))
-                        : null,
-                    onTap: () {
-                      state.setActivePersona(m.username);
-                      Navigator.pop(ctx);
-                    },
-                  );
-                }),
-              ],
-            ),
+                  ),
+                  subtitle: const Text(
+                    'Hanya centang tugas sendiri & kirim permintaan',
+                  ),
+                  trailing: isSelected
+                      ? const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF1B4D3E),
+                        )
+                      : null,
+                  onTap: () {
+                    state.setActivePersona(username);
+                    Navigator.pop(ctx);
+                  },
+                );
+              }),
+            ],
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 }
